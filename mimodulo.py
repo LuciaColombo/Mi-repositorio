@@ -420,3 +420,5 @@ class RegresionLogistica(Regresion):
         y_test = self.y_test
         y_pred = self.y_pred_prob
         grafico = ResumenGrafico.graficar_curva_roc(y_test, y_pred)
+        
+#Revisar si funcionan todas las "def"
