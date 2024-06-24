@@ -16,11 +16,12 @@ import matplotlib.pyplot as plt
 from scipy.stats import t as t_distribution
 from scipy.optimize import minimize_scalar
 import math
-from scipy.stats import norm, t
+from scipy.stats import norm, chi2, f, t
 from sklearn.metrics import confusion_matrix, roc_curve, auc
-
+import seaborn as sns
 
 class ResumenNumerico:
+    """Clase para calcular y almacenar un resumen numérico de un conjunto de datos."""
     def __init__(self, datos):
         self.datos = np.array(datos)
         self.res_num = {}
@@ -31,17 +32,16 @@ class ResumenNumerico:
     def calculo_de_media(self):
         media = sum(self.datos) / len(self.datos)
         return media
-#si regresion lineal uso esta
+
     def calculo_de_mediana(self, datos=None):
       mediana = np.median(self.datos)
       return mediana
-#pero para logistica necesito esta:
 
-    def calculo_de_desvio_estandar(self):
+    def calculo_de_desvio_estandar(self,datos=None):
         media = self.calculo_de_media()
-        n = len(datos)
+        n = len(self.datos)
         x =[]
-        for i in range(len(datos)):
+        for i in range(len(self.datos)):
           x.append((i - media)**2)
           desvio_estandar = sum(x)/n
 
@@ -57,6 +57,9 @@ class ResumenNumerico:
         return [q1, q2, q3]
 
     def generacion_resumen_numerico(self):
+        """Genera un diccionario con el resumen numérico de los datos.
+        :return: Diccionario con las estadísticas calculadas."""
+
         res_num = {
         'Media': self.calculo_de_media(),
         'Mediana': self.calculo_de_mediana(),
@@ -73,16 +76,20 @@ class ResumenNumerico:
           print(f"{estad}: {np.round(valor,3)}")
 
 class ResumenGrafico():
+    """Clase para generar resúmenes gráficos de los datos."""
     def __init__(self, datos=None):
       if datos is not None:
         self.datos = np.array(datos)
+
     def generar_datos_dist_norm(self, media, desvio):
       return np.random.normal(loc=media, scale=desvio, size = self.N)
 
     def pdf_norm(self,x, media, desvio): #curva teorica normal
+      """Calcula la función de densidad de probabilidad de una distribución normal."""
       return norm.pdf(x, media, desvio)
 
-    def r_BS(self):  #self, n ver!!! #genera datos con dist BS
+    def r_BS(self):
+        """Genera datos con una distribución BS."""
         u = np.random.uniform(size=(self.N,))
         y = u.copy()
         ind = np.where(u > 0.5)[0]
@@ -94,7 +101,8 @@ class ResumenGrafico():
         return y
 
     def teorica_BS(self,x, media, desvio):
-      contribucion_estandar = norm.pdf(x, loc=media, scale = desvio) / 2  #termino 1: densidad de una normal teorica(ver)
+      """Calcula la densidad teórica para una distribución BS."""
+      contribucion_estandar = norm.pdf(x, loc=media, scale = desvio) / 2  #termino 1: densidad de una normal teorica
       contribucion_adicional = 0  # Inicializar la variable antes del bucle for
       for j in range(5):
         media_adicional = (j/2)-1
@@ -109,12 +117,12 @@ class ResumenGrafico():
     def generacion_histograma(self, h):
         val_min = min(self.datos)
         val_max = max(self.datos)
-        bins = np.arange(val_min, val_max, h)  # cantidad de intervalos
+        bins = np.arange(val_min, val_max, h)  #cantidad de intervalos
         if val_max > bins[-1]:
             bins = np.append(bins, bins[-1] + h)
 
         m = len(bins)
-        histo = [0] * (m - 1)  # El histograma tiene m-1 bins
+        histo = [0] * (m - 1)  #El histograma tiene m-1 bins
         for valor in self.datos:
             for i in range(len(bins) - 1):
                 if valor == bins[0]:
@@ -142,12 +150,11 @@ class ResumenGrafico():
                         break
         return res
 
-    def kernel_gaussiano(self,x):
-        # Kernel gaussiano estándar
+    """Funciones para el calculo de los diferentes nucleos."""
+    def kernel_gaussiano(self,x):     # Nucleo gaussiano estándar
         return (1 / (math.sqrt(2 * math.pi))) * math.exp(-0.5 * x**2)
 
-    def kernel_uniforme(self, x):
-        # Kernel uniforme
+    def kernel_uniforme(self, x):     # Nucleo uniforme
         valor_kernel_uniforme = []
         if -1/2 < x <= 1/2:  # Aplica la condición directamente al valor de x
             valor_kernel_uniforme.append(1)
@@ -158,7 +165,7 @@ class ResumenGrafico():
     def kernel_cuadratico(self,x):
       valor_kernel_cuadratico = []
       if -1 < x <= 1:
-          cuadratico = (3/4)*(1- x **2) #controlar formula
+          cuadratico = (3/4)*(1- x **2)
           valor_kernel_cuadratico.append(cuadratico)
       else:
           valor_kernel_cuadratico.append(0)
@@ -178,12 +185,13 @@ class ResumenGrafico():
       valor = []
       n = len(x)
       if 0 < x <= max(x):
-          densidad = (1/4)*x*(np.exp(-x/2)) #controlar formula
+          densidad = (1/4)*x*(np.exp(-x/2))
           valor.append(densidad)
       else:
           valor.append(0)
       return valor
 
+    """Evalúa la densidad del núcleo en los puntos x."""
     def densidad(self,x, data, h, kernel):
         n = len(data)
         densidad_estimada = []
@@ -206,6 +214,7 @@ class ResumenGrafico():
         return densidad_estimada
 
     def graficar_curva_roc(self, y_test, y_pred):
+        """Genera y grafica la curva ROC para los datos de prueba y las predicciones del modelo de regresion logistica."""
         fpr, tpr, _ = roc_curve(y_test, y_pred)
         roc_auc = auc(fpr, tpr)
         plt.plot(fpr, tpr, color='darkorange', lw=2, label=f'Curva ROC (área = {roc_auc:.2f})')
@@ -219,6 +228,7 @@ class ResumenGrafico():
         plt.show()
 
     def graficar_qqplot(self, residuos):
+        """Grafica el QQ-plot de los residuos."""
         sm.qqplot(residuos, line='45')
         plt.show()
 
@@ -229,8 +239,17 @@ class ResumenGrafico():
         plt.title('Gráfico de Residuos vs Valores Predichos')
         plt.show()
 
+    def boxplot(self, x, y, datos=None):
+        """Genera un gráfico boxplot."""
+        if datos is None:
+            raise ValueError("No se proporcionaron datos")
+        plt.figure(figsize=(10, 6))
+        sns.boxplot(x=x, y=y, data=datos)
+        plt.title('Boxplot de {} vs {}'.format(x, y))
+        plt.show()
 
-class Regresion: #mi clase debe ser cpaz de dividir mi treinin test
+class Regresion:
+
     def __init__(self,datos):
         self.datos = datos
         self.resumen_numerico = ResumenNumerico(datos)
@@ -239,7 +258,7 @@ class Regresion: #mi clase debe ser cpaz de dividir mi treinin test
         self.coeficientes = None
         self.residuos = None
 
-    def predecir(self, x, u=0.5): #debe ser comun para regresion lineal y logistica, que devuelva solo la probabilidad
+    def predecir(self, x, u=0.5): #funcion comun para regresion lineal y logistica, devuelve solo la probabilidad
         # Verificar si se han ajustado los coeficientes
         if self.coeficientes is None:
             raise Exception("Se deben ajustar los coeficientes primero.")
@@ -250,14 +269,13 @@ class Regresion: #mi clase debe ser cpaz de dividir mi treinin test
 
 
 class RegresionLineal(Regresion):
+    """Clase para realizar cálculos de regresión lineal utilizando la librería statsmodels."""
     def __init__(self, datos):
         super().__init__(datos)
 
     def ajustar_modelo(self):
-
         # Convertir variables categóricas en dummies
-        self.datos = pd.get_dummies(self.datos, drop_first=True)
-        #self.datos = pd.get_dummies(self.datos, columns=None, prefix='', prefix_sep='')
+        self.datos = pd.get_dummies(self.datos, drop_first=True) #drop_first=True para evitar multicolinealidad.
 
         # Separar las variables independientes (x) y la variable dependiente (y)
         x = self.datos.iloc[:, :-1].values  # Todas las columnas excepto la última
@@ -293,7 +311,7 @@ class RegresionLineal(Regresion):
         self.resumen_grafico.graficar_qqplot(residuos)
         self.resumen_grafico.graficar_residuos(predicciones, residuos)
 
-## j es el índice del coeficiente para el cual deseas calcular el estadístico t de prueba, variable predictora
+    ## j es el índice del coeficiente para el cual deseas calcular el estadístico t de prueba, variable predictora
     def calcular_t_obs(self, j):
         if j >= len(self.coeficientes):
           raise ValueError(f"El índice {j} está fuera de los límites para los coeficientes del modelo.")
@@ -307,11 +325,11 @@ class RegresionLineal(Regresion):
         return t_obs
 
     def definir_region_rechazo(self, alfa):
-        """Define la región de rechazo para la hipótesis H0: beta_1 = 0 dado un nivel de significancia alpha."""
+        """Define la región de rechazo para la hipótesis H0: beta_1 = 0 dado un nivel de significancia alfa."""
         # Grados de libertad para la distribución t
         self.df_t = self.resultado.df_resid
 
-        # Calcular el valor crítico (t_critico) para el nivel de significancia alpha
+        # Calcular el valor crítico (t_critico) para el nivel de significancia alfa
         t_critico = t_distribution.ppf(1 - alfa/2, self.df_t)
 
         return t_critico
@@ -336,7 +354,6 @@ class RegresionLineal(Regresion):
         else:
             raise ValueError("Tipo de prueba no soportado. Use '=', '>' o '<'.")
 
-        #self.resumen_numerico.agregar_valor('p-valores', self.resultado.pvalues)
         return p_valor
 
         # Comprobar si p_valor < alfa para rechazar la hipótesis nula
@@ -375,6 +392,8 @@ class RegresionLineal(Regresion):
 
 
 class RegresionLogistica(Regresion):
+    """Clase para realizar cálculos de regresión logistica utilizando la librería statsmodels."""
+
     def __init__(self, datos):
         super().__init__(datos)
         self.training = None
@@ -385,8 +404,7 @@ class RegresionLogistica(Regresion):
         perm = np.random.permutation(len(self.datos))  #permutacion de los indices en un orden aleatorio
         train_end = int((1 - test_size) * len(self.datos))  #Calcula el índice que marca el final del subconjunto de entrenamiento y el inicio del subconjunto de prueba
         self.training = self.datos.iloc[perm[:train_end]].copy()  # Asignar los datos de entrenamiento
-        self.testing = self.datos.iloc[perm[train_end:]].copy()
-       # return training, testing
+        self.testing = self.datos.iloc[perm[train_end:]].copy()   # Asignar los datos de prueba
 
     def ajustar_modelo(self):
         if self.training is None or self.testing is None:
@@ -405,20 +423,104 @@ class RegresionLogistica(Regresion):
         self.coeficientes = self.resultado.params
         print(self.resultado.summary())
 
-        #self.resumen_numerico.agregar_valor('coeficientes', self.resultado.params)
-        #self.resumen_numerico.agregar_valor('p-valores', self.resultado.pvalues)
         y_test = self.testing.iloc[:, -1]
         x_test = sm.add_constant(self.testing.iloc[:, :-1])
-        y_pred_prob =  regresion_logistica.predecir(x_test)
+        y_pred_prob =  self.predecir(x_test)
         y_pred = [1 if prob > 0.5 else 0 for prob in y_pred_prob]
-        matriz_conf = confusion_matrix(y_test, y_pred)
-        self.resumen_numerico.agregar_valor('matriz de confusión', matriz_conf)
+        self.matriz_conf = confusion_matrix(y_test, y_pred)
         self.resumen_grafico.graficar_curva_roc(y_test, y_pred_prob)
+        return self
+
+    def graficar_matriz_confusion(self):
+        plt.figure(figsize=(8, 6))
+        sns.heatmap(self.matriz_conf, annot=True, cmap='Blues', fmt='g')
+        plt.xlabel('Predicciones')
+        plt.ylabel('Valores reales')
+        plt.title('Matriz de Confusión')
+        plt.show()
 
     def graficar(self, y_test, y_pred_prob):
         # Llamar al método de ResumenGrafico para graficar la curva ROC
         y_test = self.y_test
         y_pred = self.y_pred_prob
         grafico = ResumenGrafico.graficar_curva_roc(y_test, y_pred)
-        
-#Revisar si funcionan todas las "def"
+
+class chi_cuadrado:
+    def __init__(self,datos=None):
+      if datos is not None:
+        self.datos = np.array(datos)
+
+    def test(self, val_observados, prob_esperadas, alfa):
+        """Paso 1: Ajustar la última probabilidad para asegurar que sumen 1"""
+        prob_esperadas = np.array(prob_esperadas)
+        total_prob = np.sum(prob_esperadas)
+        if total_prob == 1:
+            print("La suma de las probabilidades es 1")
+        print("alfa=",alfa)
+
+        """Paso 2: Calcular los valores esperados en función de las probabilidades esperadas"""
+        total_observaciones = np.sum(val_observados)
+        val_esperados = prob_esperadas * total_observaciones
+        print(f"Valores esperados: {val_esperados}")
+
+        """Paso 3: Calcular el estadistico Chi-cuadrado """
+        chi_2 = np.sum((val_observados - val_esperados) ** 2 / val_esperados)
+        print(f"Chi-cuadrado: {chi_2}")
+
+        """Paso 4: Obtener el valor crítico de la distribución Chi-cuadrado """
+        d_f = len(val_observados)-1
+        val_critico = chi2.ppf(1 - alfa, d_f)
+        print(f"Grados de libertad: {d_f}")
+        print(f"Valor crítico percentil chi2 (α={alfa}): {val_critico}")
+
+        """Paso 5: Calcular el p-valor para el estadístico de chi-cuadrado observado """
+        p_valor = 1 - chi2.cdf(chi_2, d_f)
+        print(f"p-valor: {p_valor}")
+
+        """Paso 6: Comparar Chi-cuadrado con el valor crítico y p-valor con alfa para la conclusión """
+        if chi_2 > val_critico and p_valor < alfa:
+            resultado= "Rechazo la hipotesis nula"
+        else:
+            resultado= "No rechazo la hipotesis nula"
+        print("Conclusion del test:", resultado)
+
+
+class Anova():
+  """Clase para realizar el test ANOVA entre dos modelos de regresión."""
+  def __init__(self,datos=None):
+    if datos is not None:
+      self.datos = np.array(datos)
+
+  def test(self, modelo_m, modelo_M,alfa=None):
+
+    #Ajustar ambos modelos
+    resultado_M = modelo_M.fit()
+    resultado_m = modelo_m.fit()
+
+    #Calcular RSS de ambos modelos
+    RSS_m = sum(resultado_m.resid**2)
+    RSS_M = sum(resultado_M.resid**2)
+
+    #Calcular grado de libertad de ambos modelos
+    gl_m = resultado_m.df_resid
+    gl_M = resultado_M.df_resid
+    print("Grados de libertad:",gl_m,",", gl_M)
+
+    #Calcular el estadistico F observado
+    numerador = (RSS_m - RSS_M) / (gl_m - gl_M)
+    denominador = RSS_M / gl_M
+    F_obs = numerador / denominador
+    print(f"F-obs = {F_obs}")
+
+    #Calcular el p-valor
+    p_valor = 1-f.cdf(F_obs, gl_m-gl_M, gl_M)
+    print(f"p-valor = {p_valor}")
+
+    #Calcular el valor crítico
+    F_critico = f.ppf(1 - alfa, gl_m, gl_M)
+    print(f"F-crítico = {F_critico}")
+
+  def graficar(self, x, y, datos):
+    """Llamar al método de ResumenGrafico para graficar boxplot"""
+    grafico = ResumenGrafico()
+    grafico.boxplot(x, y, datos)
