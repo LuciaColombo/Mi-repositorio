@@ -391,31 +391,48 @@ class RegresionLineal(Regresion):
         plt.show()
 
 
-class RegresionLogistica(Regresion):
-    """Clase para realizar cálculos de regresión logistica utilizando la librería statsmodels."""
-
+class RegresionLogistica(Regresion, ResumenGrafico):
     def __init__(self, datos):
-        super().__init__(datos)
+        self.datos = datos
         self.training = None
         self.testing = None
+        self.datos_cambiados = None
 
-    def dividir_datos(self, test_size=0.2,seed=None):  #se destinará al subconjunto de prueba por defecto 0.2, es decir el 20% de los datos.
-        np.random.seed(seed)
-        perm = np.random.permutation(len(self.datos))  #permutacion de los indices en un orden aleatorio
-        train_end = int((1 - test_size) * len(self.datos))  #Calcula el índice que marca el final del subconjunto de entrenamiento y el inicio del subconjunto de prueba
-        self.training = self.datos.iloc[perm[:train_end]].copy()  # Asignar los datos de entrenamiento
-        self.testing = self.datos.iloc[perm[train_end:]].copy()   # Asignar los datos de prueba
+    def dividir_datos(self, test_size=0.2, seed=None):
+        n = len(self.datos)
+        n_train = int(n * (1 - test_size))
+        random.seed(seed)
+        cuales = random.sample(range(n), n_train)
+        self.datos_cambiados = self.datos.copy()  # Copia los datos para no modificar el original
+
+        for col in self.datos_cambiados.columns:
+          if self.datos_cambiados[col].dtype == 'object':  # Verifico si la columna es de tipo 'object'
+            unique_values = self.datos_cambiados[col].unique()
+
+            if len(unique_values) == 2 and all(isinstance(val, str) for val in unique_values):
+                print(f"Cambiando valores en la columna '{col}':")
+                print(f"Valores originales: {unique_values}")
+
+                # Mapea los valores únicos a 1 y 0
+                mapping = {unique_values[0]: 1, unique_values[1]: 0}
+                self.datos_cambiados[col] = self.datos_cambiados[col].map(mapping)
+
+                print(f"Nuevos valores: {self.datos_cambiados[col].unique()}")
+                print("-" * 30)
+        self.training = self.datos_cambiados.iloc[cuales].copy()
+        self.testing = self.datos_cambiados.drop(cuales).copy()
 
     def ajustar_modelo(self):
         if self.training is None or self.testing is None:
             raise Exception("Primero debe dividir los datos usando el método dividir_datos.")
 
-        x_train = self.training.iloc[:, :-1]
-        y_train = self.training.iloc[:, -1]
+        x_train = self.training.iloc[:, 1:].values
+        y_train = self.training.iloc[:, 0].values
 
-        # Asegurarse de que y_train esté en formato binario (0 o 1)
-        if not np.all((y_train >= 0) & (y_train <= 1)):
-            raise ValueError("Los valores de 'y_train' deben estar en el intervalo [0, 1].")
+        # Convertir y_train a binario
+        y_train = pd.to_numeric(y_train, errors='coerce')
+        y_train[np.isnan(y_train)] = 0  # Reemplazar NaN con 0
+        y_train = (y_train > 0.5).astype(int)
 
         X_train = sm.add_constant(x_train)
         self.modelo = sm.Logit(y_train, X_train)
@@ -423,12 +440,15 @@ class RegresionLogistica(Regresion):
         self.coeficientes = self.resultado.params
         print(self.resultado.summary())
 
-        y_test = self.testing.iloc[:, -1]
-        x_test = sm.add_constant(self.testing.iloc[:, :-1])
-        y_pred_prob =  self.predecir(x_test)
+        y_test = self.testing.iloc[:, 0].values
+        y_test = pd.to_numeric(y_test, errors='coerce')
+        y_test[np.isnan(y_test)] = 0
+        x_test = sm.add_constant(self.testing.iloc[:, 1:]).values
+        y_pred_prob = self.resultado.predict(x_test)
         y_pred = [1 if prob > 0.5 else 0 for prob in y_pred_prob]
         self.matriz_conf = confusion_matrix(y_test, y_pred)
-        self.resumen_grafico.graficar_curva_roc(y_test, y_pred_prob)
+        self.graficar_matriz_confusion()
+        self.graficar_curva_roc(y_test, y_pred_prob)
         return self
 
     def graficar_matriz_confusion(self):
